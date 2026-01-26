@@ -52,7 +52,7 @@
     <div class="card">
       <div class="row">
         <label for="answerInput" class="muted">
-        決まり字： ※入力時は現代かなづかいで　（例：あひみての→あい）</label>
+        決まり字： ※入力時は現代かなづかいかつ読み音で　（例：あひみての→あい  よのなかは→よのなかわ）</label>
       </div>
       <div class="row" style="margin-top: 10px;">
         <input id="answerInput" type="text" autocomplete="off" placeholder="決まり字数" />
@@ -62,6 +62,7 @@
         <button id="btnReset" type="button">リセット</button>
         <button id="btnShow" type="button">答えを見る</button>
         <button id="btnCheck" type="button">答える</button>
+        <button id="btnNext" type="button">次の問題</button>
       </div>
 
       <div style="margin-top: 10px;" class="status" id="status"></div>
@@ -71,7 +72,35 @@
       <div style="font-weight:800; margin-bottom:8px;">この一巡で間違えた札</div>
       <div id="wrongArea" class="muted small">（まだありません）</div>
     </div>
+  
+    <!-- クレジット -->
+    <div class="card small muted">
+      <div>
+        製作：
+        <strong>オガワン</strong> (with ChatGPT)
+        <a href="https://x.com/Ogawan/" target="_blank" rel="noopener noreferrer">
+          https://x.com/Ogawan/
+        </a>
+      </div>
+      <div>
+        取札画像：
+        百人一首工房さん
+        <a href="http://100poem.blog.fc2.com/" target="_blank" rel="noopener noreferrer">
+          http://100poem.blog.fc2.com/
+        </a>
+      </div>
+      <div>
+        データベース参照：
+        文化ネットさん
+        <a href="https://www.bunkanet.jp/manabi/hyakunin-isshu-karuta/element/"
+           target="_blank" rel="noopener noreferrer">
+          https://www.bunkanet.jp/manabi/hyakunin-isshu-karuta/element/
+        </a>
+      </div>
+    </div>
   </div>
+
+
 
   <!-- 100首データ -->
   <script src="cards.js"></script>
@@ -91,7 +120,7 @@
     let currentIndex = 1;
     let deck = [];
     let deckPos = 0;
-    let lastResult = "none"; // "none" | "ok" | "ng" | "shown" | "done"
+    let lastResult = "none"; // "none" | "ok" | "ng" | "shown" | "done" | "error"
     let wrongSet = new Set();
 
     /***********************
@@ -107,6 +136,7 @@
     const btnReset = document.getElementById("btnReset");
     const btnShow = document.getElementById("btnShow");
     const btnCheck = document.getElementById("btnCheck");
+    const btnNext = document.getElementById("btnNext");
 
     /***********************
      * ユーティリティ
@@ -205,7 +235,6 @@
         elInput.placeholder = `決まり字（${klen}字）`;
         elMeta.textContent = `${deckPos}/100　No.${String(n).padStart(3, "0")}　決まり字数:${klen}`;
       }
-      elImgHint.textContent = `画像: ${imgName(n)}（相対パス）`;
 
       elImg.src = imgName(n);
       elImg.onerror = () => {
@@ -264,7 +293,7 @@
       const user = normalize(elInput.value);
       if (!user) {
         setStatusText("未入力。決まり字を入れてEnter", "bad");
-        lastResult = "ng";
+        lastResult = "error";
         return;
       }
 
@@ -315,6 +344,10 @@ No.${no}
       else checkAnswer();
     });
 
+    btnNext.addEventListener("click", () => {
+      goNext();
+    });
+
     document.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -322,7 +355,8 @@ No.${no}
         else checkAnswer();
       } else if (e.key === "Escape") {
         e.preventDefault();
-        showAnswer();
+        if (lastResult === "ok" || lastResult === "ng" || lastResult === "shown") goNext();
+        else showAnswer();
       }
     });
 
