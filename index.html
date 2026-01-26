@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>百人一首 決まり字 練習</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; margin: 0; padding: 16px; }
+    .wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 12px; }
+    .card { border: 1px solid rgba(127,127,127,.35); border-radius: 12px; padding: 12px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .imgbox { display: grid; place-items: center; min-height: 240px; }
+    img.main { max-width: 100%; height: auto; border-radius: 10px; border: 1px solid rgba(127,127,127,.25); }
+    input[type="text"] { width: min(420px, 100%); padding: 10px 12px; font-size: 16px; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); }
+    button { padding: 10px 12px; font-size: 14px; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); background: transparent; cursor: pointer; }
+    button:hover { filter: brightness(1.06); }
+    .status { line-height: 1.5; }
+    .status .headline { font-size: 2em; font-weight: 900; }
+    .status .info { margin-top: 6px; white-space: pre-wrap; }
+    .ok { color: #1f6feb; }    /* blue */
+    .bad { color: #d1242f; }   /* red */
+    .muted { opacity: .8; }
+    .small { font-size: 12px; opacity: .8; }
+    /* wrong list */
+    .wrong-row { display:flex; gap:10px; align-items:center; padding:8px 0; border-top:1px solid rgba(127,127,127,.2); }
+    .wrong-row img { width: 140px; height:auto; border-radius:8px; border:1px solid rgba(127,127,127,.25); }
+    .wrong-meta { min-width:0; }
+    .wrong-meta .no { font-weight:800; }
+    .wrong-meta .kim { font-weight:800; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <div style="font-weight:800;">百人一首 決まり字 練習</div>
+          <div class="small muted">Enter＝判定／（正解後）次へ　 Esc＝答えを見る　 リセット＝シャッフルして最初から</div>
+        </div>
+        <div class="small muted" id="meta"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="imgbox">
+        <img class="main" id="cardImg" alt="取札" />
+      </div>
+      <div class="small muted" id="imgHint"></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label for="answerInput" class="muted">
+        決まり字： ※入力時は現代かなづかいで　（例：あひみての→あい）</label>
+      </div>
+      <div class="row" style="margin-top: 10px;">
+        <input id="answerInput" type="text" autocomplete="off" placeholder="決まり字数" />
+      </div>
+
+      <div class="row" style="margin-top: 10px;">
+        <button id="btnReset" type="button">リセット</button>
+        <button id="btnShow" type="button">答えを見る</button>
+        <button id="btnCheck" type="button">答える</button>
+      </div>
+
+      <div style="margin-top: 10px;" class="status" id="status"></div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:8px;">この一巡で間違えた札</div>
+      <div id="wrongArea" class="muted small">（まだありません）</div>
+    </div>
+  </div>
+
+  <!-- 100首データ -->
+  <script src="cards.js"></script>
+
+  <script>
+    /***********************
+     * 画像パス（あなたの形式）
+     ***********************/
+    function imgName(n) {
+      const s = String(n).padStart(3, "0");
+      return `fuda/f1s1_${s}.jpg`;
+    }
+
+    /***********************
+     * 状態
+     ***********************/
+    let currentIndex = 1;
+    let deck = [];
+    let deckPos = 0;
+    let lastResult = "none"; // "none" | "ok" | "ng" | "shown" | "done"
+    let wrongSet = new Set();
+
+    /***********************
+     * DOM
+     ***********************/
+    const elImg = document.getElementById("cardImg");
+    const elInput = document.getElementById("answerInput");
+    const elStatus = document.getElementById("status");
+    const elMeta = document.getElementById("meta");
+    const elImgHint = document.getElementById("imgHint");
+    const elWrong = document.getElementById("wrongArea");
+
+    const btnReset = document.getElementById("btnReset");
+    const btnShow = document.getElementById("btnShow");
+    const btnCheck = document.getElementById("btnCheck");
+
+    /***********************
+     * ユーティリティ
+     ***********************/
+    function normalize(s) {
+      return (s ?? "").trim().replace(/\u3000/g, "");
+    }
+
+    function getCard(n = currentIndex) {
+      return CARD_BY_NO.get(n) ?? null;
+    }
+
+    function getCorrect(n = currentIndex) {
+      return getCard(n)?.kimariji ?? "";
+    }
+
+    function setStatusHTML(html, kind = "") {
+      elStatus.className = "status " + kind;
+      elStatus.innerHTML = html;
+    }
+
+    function setStatusText(msg, kind = "") {
+      elStatus.className = "status " + kind;
+      elStatus.textContent = msg;
+    }
+
+    function makeDeckShuffled() {
+      deck = Array.from({ length: 100 }, (_, i) => i + 1);
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      deckPos = 0;
+    }
+
+    function nextFromDeck() {
+      if (deckPos >= deck.length) return null; // 一巡終了
+      const n = deck[deckPos];
+      deckPos++;
+      return n;
+    }
+
+    function clearWrongArea() {
+      elWrong.textContent = "（まだありません）";
+    }
+
+    function renderWrongList() {
+      const wrongs = Array.from(wrongSet.values()).sort((a, b) => a - b);
+
+      if (wrongs.length === 0) {
+        elWrong.innerHTML = '<div class="ok">全問正解！</div>';
+        return;
+      }
+
+      // 「下の句の読み　決まり字」だけをズラッと
+      elWrong.innerHTML = wrongs.map((n) => {
+        const c = getCard(n);
+        const shimo = c?.yomi_shimo ?? "";
+        const kim = c?.kimariji ?? "";
+        const no = String(n).padStart(3, "0");
+        // Noも付けておく（邪魔なら消してOK）
+        return `<div style="padding:4px 0; border-top:1px solid rgba(127,127,127,.2);">
+          <span class="muted">No.${no}</span>　${shimo}　<span class="bad" style="font-weight:900;">${kim}</span>
+        </div>`;
+      }).join("");
+
+      elWrong.innerHTML = wrongs.map((n) => {
+        const c = getCard(n);
+        const no = String(n).padStart(3, "0");
+        const kim = c?.kimariji ?? "";
+        return `
+          <div class="wrong-row">
+            <img src="${imgName(n)}" alt="No.${no}">
+            <div class="wrong-meta">
+              <div class="no">No.${no}</div>
+              <div>決まり字：<span class="kim">${kim}</span>（${c?.klen ?? "?"}字）</div>
+              <div class="small muted">${c?.author ?? ""}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    /***********************
+     * 画面更新
+     ***********************/
+    function loadCard(n) {
+      currentIndex = n;
+      lastResult = "none";
+
+      elInput.value = "";
+      setStatusText("");
+      {
+        const c = getCard(n);
+        const klen = c?.klen ?? "?";
+        elInput.placeholder = `決まり字（${klen}字）`;
+        elMeta.textContent = `${deckPos}/100　No.${String(n).padStart(3, "0")}　決まり字数:${klen}`;
+      }
+      elImgHint.textContent = `画像: ${imgName(n)}（相対パス）`;
+
+      elImg.src = imgName(n);
+      elImg.onerror = () => {
+        setStatusText(
+          "画像が読み込めない。\n" +
+          "・fuda/f1s1_001.jpg? が置けているか確認\n" +
+          "・file:// 制限が出るなら簡易サーバで開く（例: python -m http.server）",
+          "bad"
+        );
+      };
+
+      elInput.focus();
+    }
+
+    function finishRound() {
+      lastResult = "done";
+      setStatusText("一巡終了。下に間違えた札を表示した。リセットで次の一巡。", "");
+      renderWrongList();
+    }
+
+    function goNext() {
+      const n = nextFromDeck();
+      if (n === null) finishRound();
+      else loadCard(n);
+    }
+
+    function startNewRound() {
+      makeDeckShuffled();
+      wrongSet = new Set();
+      clearWrongArea();
+      setStatusText("新しい一巡を開始。", "");
+      const n = nextFromDeck();
+      if (n === null) finishRound();
+      else loadCard(n);
+    }
+
+    function showAnswer() {
+      const correct = getCorrect();
+      if (!correct) {
+        setStatusText("データが見つからない（cards.js を確認）", "bad");
+        lastResult = "ng";
+        return;
+      }
+      lastResult = "shown";
+      setStatusHTML(`<div class="headline muted">答え：${correct}</div>`, "");
+    }
+
+    function checkAnswer() {
+      const correct = normalize(getCorrect());
+      if (!correct) {
+        setStatusText("データが見つからない（cards.js を確認）", "bad");
+        lastResult = "ng";
+        return;
+      }
+
+      const user = normalize(elInput.value);
+      if (!user) {
+        setStatusText("未入力。決まり字を入れてEnter", "bad");
+        lastResult = "ng";
+        return;
+      }
+
+      if (user === correct) {
+        const c = getCard();
+        const no = String(currentIndex).padStart(3, "0");
+        setStatusHTML(
+          `<div class="headline ok">正解！</div>
+           <div class="info">
+No.${no}
+作者：${c?.author ?? ""}
+読み札：${c?.poem ?? ""}
+決まり字：${correct}
+           </div>`,
+          ""
+        );
+        lastResult = "ok";
+      } else {
+        wrongSet.add(currentIndex);
+        renderWrongList(); // 都度更新
+        const c = getCard();
+        const no = String(currentIndex).padStart(3, "0");
+        setStatusHTML(
+          `<div class="headline bad">不正解！　正解：${correct}</div>
+           <div class="info">
+No.${no}
+作者：${c?.author ?? ""}
+読み札：${c?.poem ?? ""}
+決まり字：${correct}
+           </div>`,
+          ""
+        );
+        lastResult = "ng";
+      }
+    }
+
+    /***********************
+     * イベント
+     ***********************/
+    btnReset.addEventListener("click", startNewRound);
+    btnShow.addEventListener("click", () => {
+      // 不正解表示中は「答えを見る」＝次へ（連打で暗記確認できる）
+      if (lastResult === "ok" || lastResult === "ng" || lastResult === "shown") goNext();
+      else showAnswer();
+    });
+    btnCheck.addEventListener("click", () => {
+      if (lastResult === "ok" || lastResult === "ng" || lastResult === "shown") goNext();
+      else checkAnswer();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (lastResult === "ok" || lastResult === "ng" || lastResult === "shown") goNext();
+        else checkAnswer();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        showAnswer();
+      }
+    });
+
+    /***********************
+     * 起動
+     ***********************/
+    // cards.js が読み込めているか最低限チェック
+    if (typeof CARDS === "undefined" || CARDS.length !== 100) {
+      setStatusText("cards.js が読み込めていない / 100首になっていない。index.html と同じ場所に cards.js を置いてね。", "bad");
+    } else {
+      startNewRound();
+    }
+  </script>
+</body>
+</html>
