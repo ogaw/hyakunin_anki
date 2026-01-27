@@ -321,8 +321,9 @@
     function finishRound() {
         if (wrongRound.size === 0) {
             lastResult = "done";
-            setStatusText(`完了：第${roundNo}巡で全問正解`, "ok");
+            setStatus(`完了：第${roundNo}巡で全問正解`, "ok");
             renderWrongList();
+            alert(`${roundNo}巡目で全問正解しました！`);
             return;
         }
 
@@ -332,12 +333,12 @@
         renderWrongList();
 
         makeDeckShuffled(Array.from(wrongRound));
-        setStatusText(`第${roundNo}巡を開始（残り ${totalThisRound} 問）`, "muted");
+        //setStatus(`第${roundNo}巡を開始（残り ${totalThisRound} 問）`, "muted");
         const n = nextFromDeck();
-        if (n === null) 
-            finishRound();
-        else 
-            loadCard(n);
+
+        alert(`${roundNo}巡目を開始します`);
+
+        loadCard(n);
     }
 
 
@@ -356,7 +357,7 @@
         clearWrongArea();
         setStatus("第1巡を開始。", "muted");
 
-        makeDeckShuffled(); // 1?100
+        makeDeckShuffled(); 
         const n = nextFromDeck();
         if (n === null) 
             finishRound();
@@ -371,8 +372,35 @@
         lastResult = "ng";
         return;
       }
+
       lastResult = "shown";
       setStatus(`答え：${correct}`, "");
+
+      // 回答時間（秒、小数第2位まで）
+      const elapsedSec = stopTimer();
+      const timedOut = elapsedSec >= TIMEOUT_SEC;
+
+        wrongInfo.set(currentIndex, {
+              timeSec: elapsedSec,
+              timedOut,
+        });
+        wrongSet.add(currentIndex);
+        wrongRound.add(currentIndex);
+        renderWrongList(); // 都度更新
+        const c = getCard();
+        const no = String(currentIndex).padStart(3, "0");
+        setStatusHTML(
+          `<div class="headline bad">正解：${correct}</div>
+           <div class="info">
+No.${no}
+作者：${c?.author ?? ""}
+読み札：${c?.poem ?? ""}
+決まり字：${correct}
+           </div>`,
+          ""
+        );
+        lastResult = "ng";
+
     }
 
     function checkAnswer() {
