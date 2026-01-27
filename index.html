@@ -76,7 +76,35 @@
       <div style="font-weight:800; margin-bottom:8px;">この一巡で間違えた札</div>
       <div id="wrongArea" class="muted small">（まだありません）</div>
     </div>
+  
+    <!-- クレジット -->
+    <div class="card small muted">
+      <div>
+        製作：
+        <strong>オガワン</strong> (with ChatGPT)
+        <a href="https://x.com/Ogawan/" target="_blank" rel="noopener noreferrer">
+          https://x.com/Ogawan/
+        </a>
+      </div>
+      <div>
+        取札画像：
+        百人一首工房さん
+        <a href="http://100poem.blog.fc2.com/" target="_blank" rel="noopener noreferrer">
+          http://100poem.blog.fc2.com/
+        </a>
+      </div>
+      <div>
+        データベース参照：
+        文化ネットさん
+        <a href="https://www.bunkanet.jp/manabi/hyakunin-isshu-karuta/element/"
+           target="_blank" rel="noopener noreferrer">
+          https://www.bunkanet.jp/manabi/hyakunin-isshu-karuta/element/
+        </a>
+      </div>
+    </div>
   </div>
+
+
 
   <!-- 100首データ -->
   <script src="cards.js"></script>
@@ -106,7 +134,7 @@
     // --- タイマー ---
     const TIMEOUT_SEC = 10.0;     // 10秒以上は不正解扱い（次周回へ残す）
     let questionStartMs = 0;      // performance.now()
-    let lastResult = "none"; // "none" | "ok" | "ng" | "shown" | "done"
+    let lastResult = "none"; // "none" | "ok" | "ng" | "shown" | "done" | "error"
     let wrongSet = new Set();
 
     /***********************
