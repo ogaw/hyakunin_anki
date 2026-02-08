@@ -49,7 +49,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div id="topArea" class="card">
       <div class="imgbox">
         <img class="main" id="cardImg" alt="取札" />
       </div>
@@ -67,8 +67,8 @@
         <button id="btnCheck" type="button">答える</button>
         <button id="btnNext" type="button">次の問題</button>
         <button id="btnShow" type="button">答えを見る</button>
-        <button id="btnReset" type="button">リセット(最初から)</button>
-        <div id="totalTime" class="total-time">  合計：0.00s</div>
+        <button id="btnReset" type="button">リセット</button>
+        <div id="totalTime" class="total-time">合計：0.00s</div>
       </div>
       <div style="margin-top: 10px;" class="status" id="status"></div>
     </div>
@@ -180,6 +180,22 @@
       ["む", "ん"],
     ];
 
+    function isMobile() {
+      return window.matchMedia("(max-width: 768px)").matches;
+    }
+
+    function scrollToTopArea() {
+      if (!isMobile()) return;
+      answerInput.blur();
+      document.getElementById("topArea")
+        .scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function hideKeyboard() {
+      const el = document.getElementById("answerInput");
+      el.blur();
+    }
+
     function expandSet(s) {
       let set = new Set([canon(s)]);
 
@@ -198,7 +214,7 @@
 
     const elTotalTime = document.getElementById("totalTime");
     function updateTotalTime() {
-      elTotalTime.textContent = `合計タイム：${totalTimeSec.toFixed(2)}秒`;
+      elTotalTime.textContent = `合計：${totalTimeSec.toFixed(2)}秒`;
     }
 
     function getCard(n = currentIndex) {
@@ -352,6 +368,8 @@
       };
 
       elInput.focus();
+      hideKeyboard();
+      scrollToTopArea();
     }
 
     function finishRound() {
@@ -564,6 +582,8 @@ No.${no}
         lastResult = "ng";
       }
       updateTotalTime();
+      hideKeyboard();
+      scrollToTopArea();
     }
 
     /***********************
