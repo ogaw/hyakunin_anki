@@ -179,6 +179,12 @@
       ["お", "を"],
       ["む", "ん"],
     ];
+    
+    // 札ごとの特例
+    const EXTRA_ACCEPT = {
+      44: ["あふこ", "あうこ", "おうこ", "おおこ"],
+    };    
+    
 
     function isMobile() {
       return window.matchMedia("(max-width: 768px)").matches;
@@ -500,6 +506,19 @@ No.${no}
           }
         }
       }
+      
+      // --- 特例判定（EXTRA_ACCEPT） ---
+      if (!isOk && EXTRA_ACCEPT[currentIndex]) {
+        const extraList = EXTRA_ACCEPT[currentIndex]; // 例: ["あふこ", "あうこ", ...]
+        for (const u of uSet) {
+          if (extraList.some(ex => u.startsWith(ex))) {
+            isOk = true;
+            break;
+          }
+        }
+      }
+      
+      
       
       // 回答時間（秒、小数第2位まで）
       const elapsedSec = stopTimer();
