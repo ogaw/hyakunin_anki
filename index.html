@@ -3,7 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>百人一首 決まり字 練習</title>
+  <meta name="description" content="競技かるた（小倉百人一首）の決まり字をランダム出題で練習できるブラウザ用ツール。シャッフル一巡、タイマー計測、間違いリスト機能付き。">
+  
+  <meta property="og:title" content="競技かるた 決まり字暗記アプリ | ランダム出題クイズ">
+  <meta property="og:description" content="シャッフル一巡・間違い再出題・タイマー付き。競技かるたの決まり字を効率よく練習できるブラウザツール。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://ogaw.github.io/hyakunin_anki/">
+  <meta property="og:image" content="https://ogaw.github.io/hyakunin_anki/ogp.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="競技かるた 決まり字暗記アプリ | ランダム出題クイズ">
+  <meta name="twitter:description" content="シャッフル一巡・間違い再出題・タイマー付き。競技かるたの決まり字を効率よく練習できるブラウザツール。">
+  <meta name="twitter:image" content="https://ogaw.github.io/hyakunin_anki/ogp.png">
+  
+  <title>競技かるた 決まり字暗記アプリ | ランダム出題クイズ</title>
   <style>
     :root { color-scheme: light dark; }
     body { font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; margin: 0; padding: 16px; }
@@ -43,7 +57,7 @@
     <div class="card">
       <div class="row" style="justify-content: space-between;">
         <div>
-          <div style="font-weight:800;">百人一首 決まり字 v0.95</div>
+          <div style="font-weight:800;">百人一首 決まり字 v0.97</div>
         </div>
         <div class="small muted" id="meta"></div>
       </div>
@@ -610,7 +624,7 @@ No.${no}
 No.${no}
 作者：${c?.author ?? ""}
 読み札：${c?.poem ?? ""}
-決まり字：${displayKimariji}
+決まり字：${correct}${displayKimariji}
            </div>`,
           ""
           );
@@ -641,7 +655,7 @@ No.${no}
 No.${no}
 作者：${c?.author ?? ""}
 読み札：${c?.poem ?? ""}
-決まり字：${displayKimariji}
+決まり字：${correct}${displayKimariji}
            </div>`,
           ""
         );
