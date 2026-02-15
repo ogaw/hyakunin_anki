@@ -43,7 +43,7 @@
     <div class="card">
       <div class="row" style="justify-content: space-between;">
         <div>
-          <div style="font-weight:800;">百人一首 決まり字 v0.94</div>
+          <div style="font-weight:800;">百人一首 決まり字 v0.95</div>
         </div>
         <div class="small muted" id="meta"></div>
       </div>
@@ -74,7 +74,7 @@
     </div>
 
     <div class="card">
-      <div style="font-weight:800; margin-bottom:8px;">この一巡で間違えた札</div>
+      <div style="font-weight:800; margin-bottom:8px;">一巡目で間違えた札</div>
       <div id="wrongArea" class="muted small">（まだありません）</div>
     </div>
   
@@ -140,6 +140,10 @@
     let firstWrongSet = new Set();
     let totalTimeSec = 0;   // トータル回答時間（秒）
 
+    // --- データセット ---
+    let remainingSet = new Set();
+
+
     /***********************
      * DOM
      ***********************/
@@ -185,9 +189,36 @@
       39: ["あさじ", "あさぢ"],
       44: ["あふこ", "あうこ", "おうこ", "おおこ"],
       78: ["あわじ", "あはじ", "あわぢ", "あはぢ"],
-    };    
-    
+    };
 
+
+    function getDynamicKimariji(no) {
+      // CARDS[no] に kimariji がある前提（例: CARDS[40].kimariji === "みかの" など）
+      const base = CARD_BY_NO.get(no) ?.kimariji || "";
+      if (!base) return { kimariji: "", len: 0 };
+
+      // remainingSet は「まだ詠まれてない札」だけ入ってるので、
+      // その中に base の prefix と衝突するものがあるかを調べる。
+      // （自分 no は loadCard で remainingSet から消しておく想定）
+      for (let L = 1; L <= base.length; L++) {
+        const p = base.slice(0, L);
+
+        let conflict = false;
+        for (const other of remainingSet) {
+          const ob = CARD_BY_NO.get(other)?.kimariji || "";
+          if (ob.startsWith(p)) { // ★衝突
+            conflict = true;
+            break;
+          }
+        }
+
+        if (!conflict) return { kimariji: p, len: L };
+      }
+
+      // 念のため（通常ここには来ない）
+      return { kimariji: base, len: base.length };
+    }  
+    
     function isMobile() {
       return window.matchMedia("(max-width: 768px)").matches;
     }
@@ -250,6 +281,11 @@
             [deck[i], deck[j]] = [deck[j], deck[i]];
         }
         deckPos = 0;
+
+        // ★追加：この周回で今後出る可能性がある札集合
+        remainingSet = new Set(deck);
+
+        
         totalThisRound = deck.length;
         wrongRound = new Set();
     }
@@ -349,6 +385,14 @@
     function loadCard(n) {
       currentIndex = n;
       lastResult = "none";
+      
+      // ★追加：この札はもう詠まれたので、以後の動的決まり字から除外
+      remainingSet.delete(n);      
+
+      // ★動的決まり字を取得（表示にも判定にも使う）
+      const dyn = getDynamicKimariji(n);
+      const klen = dyn.len;
+      const kexample = dyn.kimariji;
 
       // タイマー開始
       questionStartMs = performance.now();
@@ -484,6 +528,9 @@ No.${no}
         lastResult = "ng";
         return;
       }
+      
+      const dyn = getDynamicKimariji(currentIndex);
+      const correctRaw = dyn.kimariji;
 
       const user = normalize(elInput.value);
       if (!user) {
@@ -494,7 +541,8 @@ No.${no}
       
       
       const uSet = expandSet(elInput.value);
-      const kSet = expandSet(getCorrect());
+      //const kSet = expandSet(getCorrect());
+      const kSet = expandSet(correctRaw);
 
       // 決まり字は短いので「どれかで始まればOK」
       //const isOk = kSet.some(k => uSet.some(u => u.startsWith(k)));
@@ -525,6 +573,9 @@ No.${no}
       // 回答時間（秒、小数第2位まで）
       const elapsedSec = stopTimer();
       const timedOut = elapsedSec >= TIMEOUT_SEC;
+      const displayKimariji = (correct !== correctRaw) ? `(${correctRaw})` : "";
+      const c = getCard();
+      const no = String(currentIndex).padStart(3, "0");
 
       if (isOk) {
         totalTimeSec += (elapsedSec);
@@ -541,29 +592,25 @@ No.${no}
             wrongRound.add(currentIndex);
             renderWrongList(); // 都度更新
 
-            const c = getCard();
-            const no = String(currentIndex).padStart(3, "0");
             setStatusHTML(
             `<div class="headline ok">正解！ だけど遅かったので苦手札として次巡に残ります。</div>
              <div class="info">
 No.${no}
 作者：${c?.author ?? ""}
 読み札：${c?.poem ?? ""}
-決まり字：${correct}
+決まり字：${correct}${displayKimariji}
              </div>`,
             ""
         );
            lastResult = "ok";
         } else {
-            const c = getCard();
-            const no = String(currentIndex).padStart(3, "0");
             setStatusHTML(
-          `<div class="headline ok">正解！</div>
+          `<div class="headline ok">正解！${displayKimariji}</div>
            <div class="info">
 No.${no}
 作者：${c?.author ?? ""}
 読み札：${c?.poem ?? ""}
-決まり字：${correct}
+決まり字：${displayKimariji}
            </div>`,
           ""
           );
@@ -588,15 +635,13 @@ No.${no}
         wrongSet.add(currentIndex);
         wrongRound.add(currentIndex);
         renderWrongList(); // 都度更新
-        const c = getCard();
-        const no = String(currentIndex).padStart(3, "0");
         setStatusHTML(
-          `<div class="headline bad">不正解！　正解：${correct}</div>
+          `<div class="headline bad">不正解！　正解：${correct}${displayKimariji}</div>
            <div class="info">
 No.${no}
 作者：${c?.author ?? ""}
 読み札：${c?.poem ?? ""}
-決まり字：${correct}
+決まり字：${displayKimariji}
            </div>`,
           ""
         );
