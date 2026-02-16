@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>百人一首 読み上げツール</title>
+  <style>
+    :root{
+      --bg:#0b0c10;
+      --card:#141824;
+      --card2:#101420;
+      --text:#e9ecf1;
+      --muted:#a8b0c2;
+      --accent:#5dd6ff;
+      --danger:#ff5d6c;
+      --ok:#56f39a;
+      --border:rgba(255,255,255,.10);
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      background: radial-gradient(1200px 800px at 20% 0%, rgba(93,214,255,.14), transparent 55%),
+                  radial-gradient(1000px 700px at 90% 20%, rgba(255,93,108,.10), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+    }
+    .wrap{
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 14px 14px 26px;
+      padding-bottom: calc(26px + env(safe-area-inset-bottom));
+    }
+    .topbar{
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 12px 0 10px;
+      backdrop-filter: blur(10px);
+      background: linear-gradient(to bottom, rgba(11,12,16,.92), rgba(11,12,16,.55), transparent);
+    }
+    .panel{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .controls{
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .btnrow{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+    button{
+      appearance:none;
+      border:none;
+      border-radius: 14px;
+      padding: 14px 10px;
+      font-weight: 800;
+      font-size: 16px;
+      color: var(--text);
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 8px 18px rgba(0,0,0,.22);
+      transition: transform .04s ease, filter .12s ease, opacity .12s ease;
+      touch-action: manipulation;
+    }
+    button:active{ transform: translateY(1px) scale(.99); }
+    button:disabled{ opacity: .45; }
+    .btn-start{ background: rgba(93,214,255,.18); border-color: rgba(93,214,255,.35); }
+    .btn-pause{ background: rgba(255,255,255,.10); }
+    .btn-reset{ background: rgba(255,93,108,.16); border-color: rgba(255,93,108,.30); }
+    .status{
+      padding: 10px 12px 12px;
+      display:flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .badge{
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .badge.ok{ border-color: rgba(86,243,154,.35); background: rgba(86,243,154,.12); }
+    .badge.warn{ border-color: rgba(255,93,108,.35); background: rgba(255,93,108,.12); }
+    .badge.info{ border-color: rgba(93,214,255,.35); background: rgba(93,214,255,.12); }
+
+    .settings{
+      margin-top: 12px;
+      padding: 14px;
+    }
+    .h{
+      font-size: 14px;
+      letter-spacing: .02em;
+      color: var(--text);
+      font-weight: 800;
+      margin: 0 0 10px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      padding: 10px 10px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.18);
+      border: 1px solid var(--border);
+    }
+    label{
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    input[type="text"], input[type="number"]{
+      width: 100%;
+      padding: 12px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      font-size: 16px;
+      outline: none;
+    }
+    input[type="number"]{ -moz-appearance:textfield; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+    .help{
+      font-size: 12px;
+      color: rgba(233,236,241,.65);
+      line-height: 1.35;
+    }
+    .two{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      color: rgba(233,236,241,.75);
+      word-break: break-all;
+    }
+
+    /* 履歴 */
+    .history{
+      margin-top: 12px;
+      padding: 14px;
+    }
+    .histBox{
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.18);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .histList{
+      max-height: 46vh; /* スマホで見やすい */
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .histItem{
+      padding: 10px 10px;
+      border-top: 1px solid rgba(255,255,255,.06);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .histItem:first-child{ border-top: none; }
+    .histTop{
+      display:flex;
+      gap: 10px;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      color: rgba(233,236,241,.85);
+    }
+    .pill{
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: rgba(233,236,241,.9);
+      white-space: nowrap;
+    }
+    .footer{
+      margin-top: 10px;
+      color: rgba(233,236,241,.55);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    @media (max-width: 420px){
+      .btnrow{ grid-template-columns: 1fr; }
+      button{ font-size: 18px; padding: 16px 12px; }
+      .two{ grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="panel controls">
+        <div class="btnrow">
+          <button id="btnStart" class="btn-start">開始</button>
+          <button id="btnPause" class="btn-pause" disabled>一時停止</button>
+          <button id="btnReset" class="btn-reset" disabled>終了（やり直し）</button>
+        </div>
+        <div class="status">
+          <div>
+            <div id="nowLine" style="color:var(--text);font-weight:800;font-size:14px;">待機中</div>
+            <div id="subLine" style="margin-top:2px;">序歌 → ランダム（重複なし）</div>
+          </div>
+          <div id="stateBadge" class="badge info">STOP</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel settings">
+      <div class="h">設定（途中で変更OK）</div>
+
+      <div class="grid">
+        <div class="row">
+          <label>音声フォルダ名</label>
+          <select id="audioFolder" style="
+              width:100%; padding:12px 12px; border-radius:12px;
+              border:1px solid rgba(255,255,255,.14);
+              background:rgba(255,255,255,.06); color:var(--text);
+              font-size:16px; outline:none;">
+            <option value="sgymk">杉山啓A級読手(わすらもち)</option>
+            <option value="ai_kiritan">AIきりたん</option>
+          </select>
+          <div class="help">選んだフォルダから <span class="mono">nnn_m.ogg</span> を再生します</div>
+        </div>
+        <div class="row two">
+          <div>
+            <label>再生速度</label>
+            <input id="playRate" type="number" step="0.05" min="0.25" max="4.0" value="1.00" />
+            <div class="help">0.25~4.00（途中変更可）</div>
+          </div>
+          <div>
+            <label>下の句を何回読むか</label>
+            <input id="lowerRepeat" type="number" step="1" min="1" max="2" value="1" />
+            <div class="help">1 or 2（途中変更可）</div>
+          </div>
+        </div>
+
+        <div class="row two">
+          <div>
+            <label>上の句→下の句の間（ms）</label>
+            <input id="gapUpperLower" type="number" step="50" min="0" max="60000" value="800" />
+            <div class="help">ミリ秒（例：800）</div>
+          </div>
+          <div>
+            <label>下の句→次の上の句の間（ms）</label>
+            <input id="gapLowerNext" type="number" step="50" min="0" max="60000" value="1200" />
+            <div class="help">ミリ秒（例：1200）</div>
+          </div>
+        </div>
+
+        <!-- ここにラジオボタン/追加設定を増やしていく想定 -->
+        <div class="row">
+          <label>デバッグ表示</label>
+          <div class="help">
+            現在のファイル：<div id="fileLine" class="mono">-</div>
+            履歴：<span id="histLine" class="mono">0 / 100</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        ※ iOS/Safariは「開始」タップのユーザー操作がないと音声再生できない仕様があるので、最初は必ず開始ボタンから。<br/>
+        ※ 音声が見つからない場合はパス（フォルダ名/ベース名）やファイル名規則を確認。
+      </div>
+    </div>
+
+    <div class="panel history">
+      <div class="histTop">
+        <div class="h" style="margin:0;">詠んだ札（履歴）</div>
+        <div class="pill">下に追加される</div>
+      </div>
+      <div class="histBox">
+        <div id="histList" class="histList"></div>
+      </div>
+      <div class="footer">
+        表示形式：<span class="mono">順番   No   上の句  下の句</span>（yomi_kami / yomi_shimo）
+      </div>
+    </div>
+
+  </div>
+
+  <!-- cards.js を読み込む（index.html と同じ階層想定） -->
+  <script src="./cards.js"></script>
+
+<script>
+(() => {
+  // cards.js の存在チェック（ロード失敗時に即わかるように）
+  if (typeof CARDS === "undefined" || !Array.isArray(CARDS)) {
+    alert("cards.js が読み込めていない。index.html と同じ階層に cards.js を置いてリロードして。");
+    return;
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const pad3 = (n) => String(n).padStart(3, "0");
+
+  function clampInt(v, min, max, fallback){
+    const x = Number.parseInt(v, 10);
+    if (Number.isNaN(x)) return fallback;
+    return Math.min(max, Math.max(min, x));
+  }
+  function clampFloat(v, min, max, fallback){
+    const x = Number.parseFloat(v);
+    if (Number.isNaN(x)) return fallback;
+    return Math.min(max, Math.max(min, x));
+  }
+
+  // ポーズ対応ウェイト：pause中は止まり、resumeで残りを継続
+  async function waitMs(ms, guard){
+    let remain = ms;
+    const chunk = 200; // ざっくりでOK（スマホでも軽い）
+    while (remain > 0) {
+      guard.throwIfStopped();
+      await guard.waitIfPaused();
+      const step = Math.min(chunk, remain);
+      await new Promise(r => setTimeout(r, step));
+      remain -= step;
+    }
+  }
+
+  // ==========
+  // Guard (stop/pause management)
+  // ==========
+  class RunGuard {
+    constructor(){
+      this._stopped = true;
+      this._paused = false;
+      this._pauseWaiters = [];
+    }
+    start(){
+      this._stopped = false;
+      this._paused = false;
+      this._releasePauseWaiters();
+    }
+    stop(){
+      this._stopped = true;
+      this._paused = false;
+      this._releasePauseWaiters();
+    }
+    pause(){
+      if (this._stopped) return;
+      this._paused = true;
+    }
+    resume(){
+      if (this._stopped) return;
+      this._paused = false;
+      this._releasePauseWaiters();
+    }
+    get stopped(){ return this._stopped; }
+    get paused(){ return this._paused; }
+
+    throwIfStopped(){
+      if (this._stopped) throw new Error("STOPPED");
+    }
+    waitIfPaused(){
+      if (!this._paused) return Promise.resolve();
+      return new Promise(resolve => this._pauseWaiters.push(resolve));
+    }
+    _releasePauseWaiters(){
+      const ws = this._pauseWaiters;
+      this._pauseWaiters = [];
+      ws.forEach(r => r());
+    }
+  }
+
+  // ==========
+  // Audio player
+  // ==========
+  const audio = new Audio();
+  audio.preload = "auto";
+
+  function buildPath(folder, nnn, m){
+    // 「アプリルート/音声フォルダ名/音声データ名_nnn_m.ogg」
+    return `./${folder}/${folder}_${nnn}_${m}.ogg`;
+  }
+  // ===== 履歴（画面下に1行ずつ追加） =====
+  let done = 0; // 「詠んだ順番」カウンタ（001?100のみをカウント）
+  function appendHistoryLine(no){
+    const list = $("histList");
+    const card = (typeof CARD_BY_NO !== "undefined") ? CARD_BY_NO.get(no) : null;
+
+    const order = done; // done は increment後に呼ぶ想定
+    const noTxt = String(no);
+    const kami = card?.yomi_kami ?? "(yomi_kamiなし)";
+    const shimo = card?.yomi_shimo ?? "(yomi_shimoなし)";
+
+    const div = document.createElement("div");
+    div.className = "histItem";
+    div.textContent = `${order} 　　 ${noTxt}番　　${kami}　　${shimo}`;
+
+    list.appendChild(div);
+    // 一番下に自動スクロール（新規追加が見える）
+    list.scrollTop = list.scrollHeight;
+  }
+
+  async function playFile(src, guard){
+    guard.throwIfStopped();
+    await guard.waitIfPaused();
+
+    audio.pause();
+
+    // iOSでたまに必要になるのでロードを促す（失敗しても継続）
+    try { audio.load(); } catch(_){}
+
+    audio.currentTime = 0;
+    audio.src = src;
+    audio.playbackRate = getSettings().playRate;
+
+
+    // 再生中に設定変更があったら追従（rateのみ）
+    const onRate = () => {
+      const v = parseFloat($("playRate").value);
+      if (!Number.isFinite(v)) return;      // 空/不正の瞬間は上書きしない
+      audio.playbackRate = v;
+    };    
+    
+    
+    $("playRate").addEventListener("input", onRate);
+
+    try{
+      await audio.play(); // ユーザー操作無しだと弾かれる可能性あり
+    } catch (e){
+      $("playRate").removeEventListener("input", onRate);
+      throw e;
+    }
+
+    await new Promise((resolve, reject) => {
+      const onEnded = () => cleanup(resolve);
+      const onError = () => cleanup(() => reject(new Error("AUDIO_ERROR")));
+      const onPauseTick = async () => {
+        // guardがpauseされたら audioも止める。resumeで再開。
+        // ※ setIntervalはやめて、requestAnimationFrameで軽めに監視
+        try{
+          while(true){
+            if (guard.stopped) throw new Error("STOPPED");
+            if (guard.paused){
+              audio.pause();
+              await guard.waitIfPaused(); // resume待ち
+              if (!guard.stopped) {
+                audio.playbackRate = getSettings().playRate;
+                try { await audio.play(); } catch(_){}
+              }
+            }
+            await new Promise(r => requestAnimationFrame(r));
+          }
+        } catch(_){
+          // stopped などで抜ける
+        }
+      };
+
+      function cleanup(done){
+        audio.removeEventListener("ended", onEnded);
+        audio.removeEventListener("error", onError);
+        $("playRate").removeEventListener("input", onRate);
+        done();
+      }
+
+      audio.addEventListener("ended", onEnded, { once:true });
+      audio.addEventListener("error", onError, { once:true });
+      onPauseTick();
+    });
+  }
+
+  // ==========
+  // Random non-duplicate deck
+  // ==========
+  function shuffledArray(arr){
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  class Deck {
+    constructor(){
+      this.reset();
+    }
+    reset(){
+      // 001?100（序歌000は別扱い）
+      this.remaining = shuffledArray([...Array(100)].map((_,i)=> i+1));
+      this.history = [];
+    }
+    next(){
+      if (this.remaining.length === 0){
+        // 1周しきったら、また全曲をシャッフルして継続
+        this.remaining = shuffledArray(this.history);
+        this.history = [];
+      }
+      const v = this.remaining.pop();
+      this.history.push(v);
+      return v;
+    }
+    get doneCount(){
+      return this.history.length;
+    }
+  }
+
+  // ==========
+  // Settings getter
+  // ==========
+  function getSettings(){
+    return {
+      folder: $("audioFolder").value.trim() || "audio",
+      playRate: clampFloat($("playRate").value, 0.25, 4.0, 1.0),
+      lowerRepeat: clampInt($("lowerRepeat").value, 1, 2, 1),
+      gapUpperLower: clampInt($("gapUpperLower").value, 0, 60000, 800),
+      gapLowerNext: clampInt($("gapLowerNext").value, 0, 60000, 1200),
+    };
+  }
+
+  // ==========
+  // UI state
+  // ==========
+  function setBadge(kind, text){
+    const b = $("stateBadge");
+    b.className = "badge " + kind;
+    b.textContent = text;
+  }
+  function setNow(main, sub){
+    $("nowLine").textContent = main;
+    $("subLine").textContent = sub || "";
+  }
+  function setFileLine(s){
+    $("fileLine").textContent = s || "-";
+  }
+  function setHistLine(done, total){
+    $("histLine").textContent = `${done} / ${total}`;
+  }
+
+  // ==========
+  // Main run loop
+  // ==========
+  const guard = new RunGuard();
+  const deck = new Deck();
+
+  let runningPromise = null;
+
+  async function run(){
+    const s0 = getSettings();
+
+    // 序歌 000（上の句→下の句）だけ先に
+    await playKamiShimo(0);
+
+    // 以降、ランダム（重複なし）
+    while(done < 100){
+      guard.throwIfStopped();
+      const n = deck.next();
+      setHistLine(deck.doneCount, 100);
+
+      await playKamiShimo(n);
+
+      // 履歴を追加（「詠んだ札」＝1..100）
+      done += 1;
+      appendHistoryLine(n);
+
+      // 進捗表示（100周で 100/100）
+      setHistLine(done, 100);
+    }
+    
+    setBadge("info", "STOP");
+    setNow("終了", "100首読み終わりました");
+    guard.stop();
+  }
+
+  async function playKamiShimo(num){
+    const s = getSettings();
+    const nnn = pad3(num);
+
+    // 上の句(1)
+    const up = buildPath(s.folder, nnn, 1);
+    setNow(`再生中：${nnn} 上の句`, `次：下の句（×${getSettings().lowerRepeat}）`);
+    setFileLine(up);
+    await playFile(up, guard);
+
+    // 上→下の間
+    await waitMs(getSettings().gapUpperLower, guard);
+
+    // 下の句(2) を指定回数
+    const low = buildPath(s.folder, nnn, 2);
+    for (let k=1; k<=getSettings().lowerRepeat; k++){
+      setNow(`再生中：${nnn} 下の句（${k}/${getSettings().lowerRepeat}）`, `次：間隔→次の歌`);
+      setFileLine(low);
+      await playFile(low, guard);
+      if (k < getSettings().lowerRepeat){
+        // 連続で読む場合の間（とりあえず上→下と同じ値を流用。必要なら別項目に増やす）
+        await waitMs(Math.min(300, getSettings().gapUpperLower), guard);
+      }
+    }
+
+    // 下→次上の間（ただし序歌の後も適用）
+    await waitMs(getSettings().gapLowerNext, guard);
+  }
+
+  // ==========
+  // Buttons
+  // ==========
+  function setButtons(){
+    $("btnStart").disabled = !guard.stopped; // 実行中は開始無効
+    $("btnPause").disabled = guard.stopped;
+    $("btnReset").disabled = guard.stopped;
+    $("btnPause").textContent = guard.paused ? "再開" : "一時停止";
+  }
+
+  $("btnStart").addEventListener("click", async () => {
+    if (!guard.stopped) return;
+
+    // 初回はデッキを初期化（やり直し時もここ）
+    deck.reset();
+    setHistLine(0, 100);
+    done = 0;
+    document.getElementById("histList").innerHTML = "";
+
+    guard.start();
+    setBadge("ok", "RUN");
+    setNow("準備中…", "序歌を再生します");
+    setButtons();
+
+    runningPromise = (async () => {
+      try{
+        await run();
+      } catch(e){
+        // STOPPED は正常終了扱い
+        if (String(e?.message) !== "STOPPED"){
+          console.error(e);
+          setBadge("warn", "ERROR");
+          setNow("エラー", "音声ファイルのパス/命名を確認してね");
+        }
+      } finally {
+        // stopが呼ばれてなければ止める
+        if (!guard.stopped) guard.stop();
+        audio.pause();
+        audio.currentTime = 0;
+        setButtons();
+        if (guard.stopped && $("stateBadge").textContent === "RUN"){
+          setBadge("info", "STOP");
+          setNow("停止中", "開始で最初から");
+        }
+      }
+    })();
+  });
+
+  $("btnPause").addEventListener("click", () => {
+    if (guard.stopped) return;
+    if (!guard.paused){
+      guard.pause();
+      setBadge("info", "PAUSE");
+      setNow("一時停止中", "再開で続き");
+    } else {
+      guard.resume();
+      setBadge("ok", "RUN");
+      // nowLineは次の更新で上書きされる
+    }
+    setButtons();
+  });
+
+  $("btnReset").addEventListener("click", () => {
+    if (guard.stopped) return;
+    guard.stop();
+    audio.pause();
+    audio.currentTime = 0;
+    setBadge("info", "STOP");
+    setNow("停止中", "開始で最初から");
+    setFileLine("-");
+    setButtons();
+  });
+
+  // 設定が不正値にならないよう軽く矯正（入力中は邪魔しない）
+  ["playRate","lowerRepeat","gapUpperLower","gapLowerNext"].forEach(id => {
+    $(id).addEventListener("change", () => {
+      const s = getSettings();
+      $("playRate").value = s.playRate.toFixed(2);
+      $("lowerRepeat").value = String(s.lowerRepeat);
+      $("gapUpperLower").value = String(s.gapUpperLower);
+      $("gapLowerNext").value = String(s.gapLowerNext);
+    });
+  });
+
+  // 初期UI
+  setButtons();
+  setHistLine(0, 100);
+})();
+</script>
+</body>
+</html>
