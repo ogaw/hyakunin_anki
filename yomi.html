@@ -76,6 +76,7 @@
     button:disabled{ opacity: .45; }
     .btn-start{ background: rgba(93,214,255,.18); border-color: rgba(93,214,255,.35); }
     .btn-pause{ background: rgba(255,255,255,.10); }
+    .btn-next { background: rgba(255,255,255,.10); }
     .btn-reset{ background: rgba(255,93,108,.16); border-color: rgba(255,93,108,.30); }
     .status{
       padding: 10px 12px 12px;
@@ -223,6 +224,7 @@
         <div class="btnrow">
           <button id="btnStart" class="btn-start">開始</button>
           <button id="btnPause" class="btn-pause" disabled>一時停止</button>
+           <button id="btnNext" class="btn-next"  disabled>次の歌</button>
           <button id="btnReset" class="btn-reset" disabled>終了（やり直し）</button>
         </div>
         <div class="status">
@@ -391,6 +393,8 @@
     }
   }
 
+  let skipRequested = false;
+
   // ==========
   // Audio player
   // ==========
@@ -440,7 +444,7 @@
       const v = parseFloat($("playRate").value);
       if (!Number.isFinite(v)) return;      // 空/不正の瞬間は上書きしない
       audio.playbackRate = v;
-    };    
+    };
     
     
     $("playRate").addEventListener("input", onRate);
@@ -461,6 +465,7 @@
         try{
           while(true){
             if (guard.stopped) throw new Error("STOPPED");
+
             if (guard.paused){
               audio.pause();
               await guard.waitIfPaused(); // resume待ち
@@ -576,7 +581,6 @@
       guard.throwIfStopped();
       const n = deck.next();
       setHistLine(deck.doneCount, 100);
-
       await playKamiShimo(n);
 
       // 履歴を追加（「詠んだ札」＝1..100）
@@ -628,6 +632,7 @@
     $("btnStart").disabled = !guard.stopped; // 実行中は開始無効
     $("btnPause").disabled = guard.stopped;
     $("btnReset").disabled = guard.stopped;
+    $("btnNext").disabled  = guard.stopped;
     $("btnPause").textContent = guard.paused ? "再開" : "一時停止";
   }
 
@@ -681,6 +686,11 @@
       // nowLineは次の更新で上書きされる
     }
     setButtons();
+  });
+  
+  $("btnNext").addEventListener("click", () => {
+    if (guard.stopped) return;
+    skipRequested = true;
   });
 
   $("btnReset").addEventListener("click", () => {
