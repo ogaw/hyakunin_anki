@@ -242,7 +242,7 @@
 
       <div class="grid">
         <div class="row">
-          <label>音声フォルダ名</label>
+          <label>読手選択</label>
           <select id="audioFolder" style="
               width:100%; padding:12px 12px; border-radius:12px;
               border:1px solid rgba(255,255,255,.14);
@@ -251,7 +251,6 @@
             <option value="sgymk">杉山啓A級読手(わすらもち)</option>
             <option value="ai_kiritan">AIきりたん</option>
           </select>
-          <div class="help">選んだフォルダから <span class="mono">nnn_m.ogg</span> を再生します</div>
         </div>
         <div class="row two">
           <div>
@@ -260,7 +259,7 @@
             <div class="help">0.25~4.00（途中変更可）</div>
           </div>
           <div>
-            <label>下の句を何回読むか</label>
+            <label>下の句を読む回数</label>
             <input id="lowerRepeat" type="number" step="1" min="1" max="2" value="1" />
             <div class="help">1 or 2（途中変更可）</div>
           </div>
@@ -268,30 +267,22 @@
 
         <div class="row two">
           <div>
-            <label>上の句→下の句の間（ms）</label>
+            <label>上の句→下の句の間（ミリ秒）</label>
             <input id="gapUpperLower" type="number" step="50" min="0" max="60000" value="800" />
-            <div class="help">ミリ秒（例：800）</div>
           </div>
           <div>
-            <label>下の句→次の上の句の間（ms）</label>
+            <label>下の句→次の上の句の間（ミリ秒）</label>
             <input id="gapLowerNext" type="number" step="50" min="0" max="60000" value="1200" />
-            <div class="help">ミリ秒（例：1200）</div>
           </div>
         </div>
 
         <!-- ここにラジオボタン/追加設定を増やしていく想定 -->
         <div class="row">
-          <label>デバッグ表示</label>
           <div class="help">
-            現在のファイル：<div id="fileLine" class="mono">-</div>
+            <div>1周にかかる時間（概算）：<span id="cycleTimeLine" class="mono">-</span></div>
             履歴：<span id="histLine" class="mono">0 / 100</span>
           </div>
         </div>
-      </div>
-
-      <div class="footer">
-        ※ iOS/Safariは「開始」タップのユーザー操作がないと音声再生できない仕様があるので、最初は必ず開始ボタンから。<br/>
-        ※ 音声が見つからない場合はパス（フォルダ名/ベース名）やファイル名規則を確認。
       </div>
     </div>
 
@@ -335,18 +326,6 @@
     return Math.min(max, Math.max(min, x));
   }
 
-  // ポーズ対応ウェイト：pause中は止まり、resumeで残りを継続
-  async function waitMs(ms, guard){
-    let remain = ms;
-    const chunk = 200; // ざっくりでOK（スマホでも軽い）
-    while (remain > 0) {
-      guard.throwIfStopped();
-      await guard.waitIfPaused();
-      const step = Math.min(chunk, remain);
-      await new Promise(r => setTimeout(r, step));
-      remain -= step;
-    }
-  }
 
   // ==========
   // Guard (stop/pause management)
@@ -393,7 +372,33 @@
     }
   }
 
+
+  // ==========
+  // skip
+  // ==========
   let skipRequested = false;
+  let skipGen = 0;
+  const SKIP_WAIT_MS = 1000;
+
+  function requestSkip(){
+    skipGen++;
+    audio.pause();
+  }
+
+  async function waitMs(ms, guard, myGen){
+    let remain = ms;
+    const chunk = 200;
+    while (remain > 0) {
+      guard.throwIfStopped();
+      await guard.waitIfPaused();
+      if (skipGen !== myGen) return false; // 中断
+      const step = Math.min(chunk, remain);
+      await new Promise(r => setTimeout(r, step));
+      remain -= step;
+    }
+    return true;
+  }
+
 
   // ==========
   // Audio player
@@ -425,7 +430,7 @@
     list.scrollTop = list.scrollHeight;
   }
 
-  async function playFile(src, guard){
+  async function playFile(src, guard, myGen){
     guard.throwIfStopped();
     await guard.waitIfPaused();
 
@@ -456,41 +461,31 @@
       throw e;
     }
 
-    await new Promise((resolve, reject) => {
-      const onEnded = () => cleanup(resolve);
-      const onError = () => cleanup(() => reject(new Error("AUDIO_ERROR")));
-      const onPauseTick = async () => {
-        // guardがpauseされたら audioも止める。resumeで再開。
-        // ※ setIntervalはやめて、requestAnimationFrameで軽めに監視
-        try{
-          while(true){
-            if (guard.stopped) throw new Error("STOPPED");
-
-            if (guard.paused){
-              audio.pause();
-              await guard.waitIfPaused(); // resume待ち
-              if (!guard.stopped) {
-                audio.playbackRate = getSettings().playRate;
-                try { await audio.play(); } catch(_){}
-              }
-            }
-            await new Promise(r => requestAnimationFrame(r));
-          }
-        } catch(_){
-          // stopped などで抜ける
-        }
-      };
-
-      function cleanup(done){
+    return await new Promise((resolve, reject) => {
+      let is_done = false;
+      const cleanup = () => {
+        if (is_done) return;
+        is_done = true;
         audio.removeEventListener("ended", onEnded);
         audio.removeEventListener("error", onError);
         $("playRate").removeEventListener("input", onRate);
-        done();
-      }
+      };
+
+      const onEnded = () => { cleanup(); resolve(true); };
+      const onError = () => { cleanup(); reject(new Error("AUDIO_ERROR")); };
 
       audio.addEventListener("ended", onEnded, { once:true });
       audio.addEventListener("error", onError, { once:true });
-      onPauseTick();
+
+      (async () => {
+        while (!is_done) {
+          if (guard.stopped) { cleanup(); reject(new Error("STOPPED")); return; }
+          if (skipGen !== myGen) { cleanup(); resolve(false); return; } // 中断
+          if (guard.paused && !audio.paused) audio.pause();
+          if (!guard.paused && audio.paused) { try { await audio.play(); } catch(_){} }
+          await new Promise(r => requestAnimationFrame(r));
+        }
+      })();
     });
   }
 
@@ -562,6 +557,55 @@
     $("histLine").textContent = `${done} / ${total}`;
   }
 
+  function formatMinSec(totalSec){
+    totalSec = Math.max(0, Math.round(totalSec));
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}分${String(s).padStart(2,"0")}秒`;
+  }
+
+  // ogg総再生秒数（序歌含む・上下句1回ずつの合計）
+  const AUDIO_SUM_SEC = {
+    sgymk: 1706,
+    ai_kiritan: 1754,
+  };
+
+  // ogg総再生秒数（序歌含む）
+  // ※あとで実測値を入れ替える前提：上の句合計 / 下の句合計
+  const AUDIO_SUM_KAMI_SEC = {
+    sgymk: 818,        // TODO: 上の句合計（序歌000含む）
+    ai_kiritan: 971,   // TODO
+  };
+
+  const AUDIO_SUM_SHIMO_SEC = {
+    sgymk: 888,        // TODO: 下の句合計（序歌000含む）
+    ai_kiritan: 783,   // TODO
+  };
+
+
+  // 1周=「序歌(000) + 100首」なので 101回ぶん
+  const CYCLE_COUNT = 101;
+
+  function updateCycleTimeUI(){
+    const s = getSettings();
+    const kami = AUDIO_SUM_KAMI_SEC[s.folder] ?? 0;
+    const shimo = AUDIO_SUM_SHIMO_SEC[s.folder] ?? 0;
+
+    // lowerRepeat は「下の句を合計で何回読むか」なので、そのまま掛ける
+    const audioBaseSec = kami + shimo * s.lowerRepeat;
+
+    // 音声は再生速度の逆数でスケール
+    const audioSec = audioBaseSec / s.playRate;
+
+    // ウェイトは固定時間×回数（ms→sec）
+    const waitSec = (s.gapUpperLower + s.gapLowerNext) * CYCLE_COUNT / 1000;
+
+    const total = audioSec + waitSec;
+
+    const el = document.getElementById("cycleTimeLine");
+    if (el) el.textContent = `${formatMinSec(total)}（音声${formatMinSec(audioSec)} + 待ち${formatMinSec(waitSec)}）`;
+  }
+
   // ==========
   // Main run loop
   // ==========
@@ -581,7 +625,7 @@
       guard.throwIfStopped();
       const n = deck.next();
       setHistLine(deck.doneCount, 100);
-      await playKamiShimo(n);
+      const ok = await playKamiShimo(n);
 
       // 履歴を追加（「詠んだ札」＝1..100）
       done += 1;
@@ -589,6 +633,11 @@
 
       // 進捗表示（100周で 100/100）
       setHistLine(done, 100);
+
+      if (!ok){
+        await new Promise(r => setTimeout(r, SKIP_WAIT_MS));
+      }
+
     }
     
     setBadge("info", "STOP");
@@ -596,33 +645,29 @@
     guard.stop();
   }
 
+
   async function playKamiShimo(num){
+    const myGen = skipGen;                 // この歌の世代を固定
     const s = getSettings();
     const nnn = pad3(num);
 
-    // 上の句(1)
     const up = buildPath(s.folder, nnn, 1);
-    setNow(`再生中：${nnn} 上の句`, `次：下の句（×${getSettings().lowerRepeat}）`);
-    setFileLine(up);
-    await playFile(up, guard);
+    const ok1 = await playFile(up, guard, myGen);
+    if (!ok1) return false;
 
-    // 上→下の間
-    await waitMs(getSettings().gapUpperLower, guard);
+    const okGap1 = await waitMs(s.gapUpperLower, guard, myGen);
+    if (!okGap1) return false;
 
-    // 下の句(2) を指定回数
     const low = buildPath(s.folder, nnn, 2);
-    for (let k=1; k<=getSettings().lowerRepeat; k++){
-      setNow(`再生中：${nnn} 下の句（${k}/${getSettings().lowerRepeat}）`, `次：間隔→次の歌`);
-      setFileLine(low);
-      await playFile(low, guard);
-      if (k < getSettings().lowerRepeat){
-        // 連続で読む場合の間（とりあえず上→下と同じ値を流用。必要なら別項目に増やす）
-        await waitMs(Math.min(300, getSettings().gapUpperLower), guard);
-      }
+    for (let k=1; k<=s.lowerRepeat; k++){
+      const ok2 = await playFile(low, guard, myGen);
+      if (!ok2) return false;
     }
 
-    // 下→次上の間（ただし序歌の後も適用）
-    await waitMs(getSettings().gapLowerNext, guard);
+    const okGap2 = await waitMs(s.gapLowerNext, guard, myGen);
+    if (!okGap2) return false;
+
+    return true;
   }
 
   // ==========
@@ -690,7 +735,7 @@
   
   $("btnNext").addEventListener("click", () => {
     if (guard.stopped) return;
-    skipRequested = true;
+    requestSkip();
   });
 
   $("btnReset").addEventListener("click", () => {
@@ -712,12 +757,21 @@
       $("lowerRepeat").value = String(s.lowerRepeat);
       $("gapUpperLower").value = String(s.gapUpperLower);
       $("gapLowerNext").value = String(s.gapLowerNext);
+      updateCycleTimeUI();
     });
   });
+  $("audioFolder").addEventListener("change", updateCycleTimeUI);
+  $("playRate").addEventListener("input", updateCycleTimeUI);
+  $("gapUpperLower").addEventListener("input", updateCycleTimeUI);
+  $("gapLowerNext").addEventListener("input", updateCycleTimeUI);
+  $("lowerRepeat").addEventListener("input", updateCycleTimeUI);
+
+
 
   // 初期UI
   setButtons();
   setHistLine(0, 100);
+  updateCycleTimeUI();
 })();
 </script>
 </body>
