@@ -275,6 +275,18 @@
             <input id="gapLowerNext" type="number" step="50" min="0" max="60000" value="1200" />
           </div>
         </div>
+        <div class="row two">
+          <div>
+            <label>暗記タイマー（秒）</label>
+            <input id="alarmSec" type="number" step="10" min="10" max="900" value="300" />
+            <div class="help">既定 300秒(5分)、最大 900秒(15分)</div>
+          </div>
+          <div>
+            <label>アラーム</label>
+            <button id="btnAlarm" type="button">暗記タイマー開始</button>
+            <div class="help">残り：<span id="alarmRemain" class="mono">-</span></div>
+          </div>
+        </div> 
 
         <!-- ここにラジオボタン/追加設定を増やしていく想定 -->
         <div class="row">
@@ -405,6 +417,91 @@
   // ==========
   const audio = new Audio();
   audio.preload = "auto";
+
+  // ==========
+  // Alarm (暗記タイマー)
+  // ==========
+  const alarmAudio = new Audio();
+  alarmAudio.preload = "auto";
+
+  let alarmTimerId = null;
+  let alarmEndAtMs = 0;
+
+  function formatMMSS(sec){
+    sec = Math.max(0, Math.floor(sec));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  function setAlarmUIRunning(running){
+    $("btnAlarm").textContent = running ? "暗記タイマー停止" : "暗記タイマー開始";
+  }
+
+  function updateAlarmRemainUI(){
+    const el = $("alarmRemain");
+    if (!el) return;
+    if (!alarmTimerId){
+      el.textContent = "-";
+      return;
+    }
+    const remain = Math.max(0, Math.ceil((alarmEndAtMs - Date.now()) / 1000));
+    el.textContent = formatMMSS(remain);
+  }
+
+  function stopAlarmTimer(){
+    if (alarmTimerId){
+      clearInterval(alarmTimerId);
+      alarmTimerId = null;
+    }
+    alarmEndAtMs = 0;
+    setAlarmUIRunning(false);
+    updateAlarmRemainUI();
+  }
+
+  async function playAlarmSound(filename){
+    // start/finish を再生（メイン再生とは別Audioで干渉回避）
+    try{
+      alarmAudio.pause();
+      alarmAudio.currentTime = 0;
+      alarmAudio.src = `./${filename}`;
+      try { alarmAudio.load(); } catch(_){}
+      await alarmAudio.play();
+    } catch(e){
+      // 端末の制限で鳴らない場合があるので握りつぶす（UIは止めない）
+      console.warn("alarm sound blocked:", e);
+    }
+  }
+
+  async function startAlarmTimer(){
+    // 秒数取得（最大15分）
+    const sec = clampInt($("alarmSec").value, 10, 900, 300);
+
+    // 入力欄を矯正表示
+    $("alarmSec").value = String(sec);
+
+    // 開始音（音が出るか確認）
+    await playAlarmSound("start.mp3");
+
+    // 既存があれば止めてから開始
+    stopAlarmTimer();
+
+    alarmEndAtMs = Date.now() + sec * 1000;
+    setAlarmUIRunning(true);
+    updateAlarmRemainUI();
+
+    alarmTimerId = setInterval(async () => {
+      const remainMs = alarmEndAtMs - Date.now();
+      if (remainMs <= 0){
+        stopAlarmTimer();
+        await playAlarmSound("end.mp3");
+        return;
+      }
+      updateAlarmRemainUI();
+    }, 250);
+  }
+
+
 
   function buildPath(folder, nnn, m){
     // 「アプリルート/音声フォルダ名/音声データ名_nnn_m.ogg」
@@ -743,11 +840,22 @@
     guard.stop();
     audio.pause();
     audio.currentTime = 0;
+    stopAlarmTimer();
     setBadge("info", "STOP");
     setNow("停止中", "開始で最初から");
     setFileLine("-");
     setButtons();
   });
+  
+  $("btnAlarm").addEventListener("click", async () => {
+    // 実行中なら停止、停止中なら開始
+    if (alarmTimerId){
+      stopAlarmTimer();
+    } else {
+      await startAlarmTimer();
+    }
+  });
+  
 
   // 設定が不正値にならないよう軽く矯正（入力中は邪魔しない）
   ["playRate","lowerRepeat","gapUpperLower","gapLowerNext"].forEach(id => {
